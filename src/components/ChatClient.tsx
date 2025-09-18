@@ -85,12 +85,13 @@ export default function ChatClient({
               ? "max-w-[85%] rounded-2xl px-4 py-2 text-sm message-bubble-assistant"
               : "max-w-[85%] rounded-2xl px-4 py-2 text-sm message-bubble-user"
           }
+          style={{ contain: 'content', contentVisibility: 'auto' }}
           ref={isLastUser ? lastSentUserElementRef : undefined}
         >
           {isAssistant ? (
             <div className="prose prose-sm dark:prose-invert max-w-none fade-in">
               {messageText ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={markdownComponents}>
+                <ReactMarkdown skipHtml remarkPlugins={[remarkGfm, remarkBreaks]} components={markdownComponents}>
                   {messageText}
                 </ReactMarkdown>
               ) : (
@@ -395,8 +396,7 @@ export default function ChatClient({
       const finalKbTitle = kbTitle || (finalKbRefs && finalKbRefs[0]?.title) || undefined;
       const finalKbUrl = kbUrl || (finalKbRefs && finalKbRefs[0]?.url) || undefined;
 
-      // Ensure final flush in case last chunk didn't trigger (with stripped content)
-      flushUpdate();
+      // Skip redundant final flush; update final assistant state below
       setMessages((prev) => {
         const next = [...prev];
         for (let i = next.length - 1; i >= 0; i--) {
