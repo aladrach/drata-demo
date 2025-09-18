@@ -53,8 +53,9 @@ export function SiteNavbar() {
           </Button>
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden">
-                <Menu className="h-5 w-5" />
+              <Button variant="ghost" size="icon" className="md:hidden" aria-label="Open navigation menu">
+                <Menu className="h-5 w-5" aria-hidden="true" />
+                <span className="sr-only">Open navigation menu</span>
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-72">
