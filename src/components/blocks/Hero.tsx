@@ -6,7 +6,7 @@ import type { Hero as HeroType } from '@/lib/cms/types';
 export default function Hero(props: HeroType) {
   const { eyebrow, headline, subhead, primaryCTA, secondaryCTA, media, design } = props;
   return (
-    <Section design={design}>
+    <Section design={design} loading="eager">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
         <div className="flex flex-col gap-4">
           {eyebrow ? <div className="text-sm font-medium uppercase tracking-wide text-muted-foreground">{eyebrow}</div> : null}

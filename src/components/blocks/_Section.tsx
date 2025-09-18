@@ -6,9 +6,10 @@ import { padTopMap, padBottomMap, widthMap, alignMap, bgMap, variantContainerMap
 type Props = {
   design?: DesignControls;
   children: React.ReactNode;
+  loading?: 'eager' | 'lazy';
 };
 
-export default function Section({ design, children }: Props) {
+export default function Section({ design, children, loading = 'lazy' }: Props) {
   const paddingTop = design?.paddingTop ?? 'none';
   const paddingBottom = design?.paddingBottom ?? 'none';
   const width = design?.containerWidth ?? 'default';
@@ -40,7 +41,8 @@ export default function Section({ design, children }: Props) {
           aria-hidden
           fill
           sizes="100vw"
-          priority={false}
+          priority={loading === 'eager'}
+          fetchPriority={loading === 'eager' ? 'high' : 'auto'}
           className="pointer-events-none absolute inset-0 -z-10 object-cover"
         />
       ) : null}
