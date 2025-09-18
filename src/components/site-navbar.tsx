@@ -27,7 +27,7 @@ export function SiteNavbar() {
   const pathname = usePathname();
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 animate-in fade-in duration-300">
+    <header className="sticky top-0 z-40 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60 animate-in fade-in duration-300 isolate transform-gpu will-change-transform [backface-visibility:hidden]">
       <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 sm:px-6">
         <div className="flex flex-1 items-center gap-2">
           <Link href="/" className="font-semibold">

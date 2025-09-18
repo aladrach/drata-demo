@@ -33,7 +33,7 @@ export default function Section({ design, children, loading = 'lazy' }: Props) {
     .join(' ');
 
   return (
-    <section className={`${bgMap[background]} ${visibility} mx-[calc(50%-50vw)] w-screen ${background === 'subtle' ? 'subtle-gradient-section' : ''}`}>
+    <section className={`${bgMap[background]} ${visibility} mx-[calc(50%-50vw)] w-screen ${background === 'subtle' ? 'subtle-gradient-section' : ''} relative overflow-hidden`}>
       {background === 'image' && design?.backgroundImage?.url ? (
         <Image
           src={design.backgroundImage.url}
