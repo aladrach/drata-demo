@@ -2,9 +2,11 @@ import Image from 'next/image';
 import Section from '@/components/blocks/_Section';
 import { CTAButton } from '@/components/cta';
 import type { Hero as HeroType } from '@/lib/cms/types';
+import { fetchInlineMedia } from '@/lib/fetchInlineMedia';
 
-export default function Hero(props: HeroType) {
+export default async function Hero(props: HeroType) {
   const { eyebrow, headline, subhead, primaryCTA, secondaryCTA, media, design } = props;
+  const mediaResult = media?.url ? await fetchInlineMedia(media.url, 3600) : null;
   return (
     <Section design={design} loading="eager">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
@@ -21,7 +23,16 @@ export default function Hero(props: HeroType) {
         </div>
         {media?.url ? (
           <div className="relative aspect-[16/10] w-full animate-in fade-in-50 zoom-in-95 duration-700 overflow-hidden">
-            <Image src={media.url} alt={headline} fill sizes="(min-width: 768px) 50vw, 100vw" className="object-cover" loading="eager" fetchPriority='high' />
+            {mediaResult && mediaResult.kind === 'svg' ? (
+              <div
+                className="absolute inset-0"
+                aria-label={headline}
+                role="img"
+                dangerouslySetInnerHTML={{ __html: mediaResult.svg }}
+              />
+            ) : (
+              <Image src={media.url} alt={headline} fill sizes="(min-width: 768px) 50vw, 100vw" className="object-cover" loading="eager" fetchPriority='high' />
+            )}
           </div>
         ) : null}
       </div>

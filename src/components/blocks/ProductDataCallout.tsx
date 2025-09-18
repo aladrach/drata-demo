@@ -1,6 +1,6 @@
 import Section from '@/components/blocks/_Section';
 import type { ProductDataCallout as ProductDataCalloutType } from '@/lib/cms/types';
-import { headers } from 'next/headers';
+import { fetchMetricsFromSource } from '@/lib/metrics';
 
 async function fetchMetrics(input: {
   source: 'openweather' | 'worldbank';
@@ -8,19 +8,7 @@ async function fetchMetrics(input: {
   metricKeys: string[];
   format?: string;
 }) {
-  const params = new URLSearchParams({
-    query: input.query,
-    metricKeys: JSON.stringify(input.metricKeys || []),
-    format: input.format || '',
-  });
-  const h = await headers();
-  const host = h.get('x-forwarded-host') || h.get('host');
-  const proto = h.get('x-forwarded-proto') || 'http';
-  const base = `${proto}://${host}`;
-  const url = new URL(`/api/data/${input.source}`, base);
-  url.search = params.toString();
-  const res = await fetch(url, { next: { revalidate: 300 } });
-  return (await res.json()) as { ok: boolean; data?: Record<string, number | string>; error?: string };
+  return fetchMetricsFromSource(input.source, input.query, input.metricKeys, input.format);
 }
 
 export default async function ProductDataCallout(props: ProductDataCalloutType) {
