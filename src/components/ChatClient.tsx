@@ -338,7 +338,42 @@ export default function ChatClient() {
           }
         }
       }
-      // Ensure final flush in case last chunk didn't trigger
+      // Parse optional metadata trailer and strip it from the visible text
+      let kbRefsFromTrailer: Array<{ title?: string; url: string }> | undefined;
+      try {
+        const PREFIX = "\n<|assistant_metadata|>";
+        const SUFFIX = "</|assistant_metadata|>";
+        const startIdx = accumulated.lastIndexOf(PREFIX);
+        const endIdx = accumulated.lastIndexOf(SUFFIX);
+        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+          const jsonStr = accumulated.slice(startIdx + PREFIX.length, endIdx).trim();
+          try {
+            const meta = JSON.parse(jsonStr) as { content?: string; refs?: Array<{ title?: string; url?: string }> };
+            if (meta && Array.isArray(meta.refs)) {
+              kbRefsFromTrailer = meta.refs
+                .map((r) => ({ title: typeof r.title === 'string' ? r.title : undefined, url: String(r.url || '') }))
+                .filter((r) => !!r.url);
+            }
+            if (meta && typeof meta.content === 'string' && meta.content.length > 0) {
+              // Prefer the content field if provided
+              accumulated = meta.content;
+            } else {
+              // Otherwise, strip the trailer from accumulated
+              accumulated = accumulated.slice(0, startIdx);
+            }
+          } catch {
+            // If JSON parse fails, just strip the trailer text to avoid showing it
+            accumulated = accumulated.slice(0, startIdx);
+          }
+        }
+      } catch {}
+
+      // Determine final refs/title/url, preferring headers, falling back to trailer
+      const finalKbRefs = (kbRefs && kbRefs.length) ? kbRefs : kbRefsFromTrailer;
+      const finalKbTitle = kbTitle || (finalKbRefs && finalKbRefs[0]?.title) || undefined;
+      const finalKbUrl = kbUrl || (finalKbRefs && finalKbRefs[0]?.url) || undefined;
+
+      // Ensure final flush in case last chunk didn't trigger (with stripped content)
       flushUpdate();
       setMessages((prev) => {
         const next = [...prev];
@@ -347,9 +382,9 @@ export default function ChatClient() {
           if (m && m.role === "assistant") {
             (m as unknown as { content: string }).content = accumulated;
             (m as AssistantExtras).answerText = accumulated;
-            if (kbTitle) (m as AssistantExtras).kbTitle = kbTitle;
-            if (kbUrl) (m as AssistantExtras).kbUrl = kbUrl;
-            if (kbRefs && kbRefs.length) (m as AssistantExtras).kbRefs = kbRefs;
+            if (finalKbTitle) (m as AssistantExtras).kbTitle = finalKbTitle;
+            if (finalKbUrl) (m as AssistantExtras).kbUrl = finalKbUrl;
+            if (finalKbRefs && finalKbRefs.length) (m as AssistantExtras).kbRefs = finalKbRefs;
             (m as AssistantExtras).streaming = false;
             break;
           }

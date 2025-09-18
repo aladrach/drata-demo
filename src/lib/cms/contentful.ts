@@ -387,8 +387,9 @@ export const listChatbotFaqSuggestions = cache(async ({ preview = false }: { pre
 
 // Chatbot Knowledge Base (for RAG grounding)
 const CHATBOT_KNOWLEDGE_BASE = /* GraphQL */ `
-query ChatbotKnowledgeBase($preview: Boolean = false) {
-  chatbotKnowledgeBaseCollection(limit: 200, preview: $preview) {
+query ChatbotKnowledgeBase($preview: Boolean = false, $limit: Int = 200, $skip: Int = 0) {
+  chatbotKnowledgeBaseCollection(limit: $limit, skip: $skip, preview: $preview) {
+    total
     items {
       contentName
       sourceUrl
@@ -422,9 +423,23 @@ function flattenRichTextToPlainText(root: { json?: RichNode } | { [key: string]:
 
 export type ChatbotKBEntry = { name: string; sourceUrl?: string; text: string };
 export const listChatbotKnowledgeBase = cache(async ({ preview = false }: { preview?: boolean } = {}): Promise<ChatbotKBEntry[]> => {
-  const data = await gql<unknown>(CHATBOT_KNOWLEDGE_BASE, { preview }, { preview });
-  const items = (data as { chatbotKnowledgeBaseCollection?: { items?: Array<{ contentName?: string; sourceUrl?: string; content?: { json?: unknown } }> } })?.chatbotKnowledgeBaseCollection?.items ?? [];
-  return items
+  const PAGE_SIZE = 200;
+  let all: Array<{ contentName?: string; sourceUrl?: string; content?: { json?: unknown } }> = [];
+  // Fetch first page to get total
+  const first = await gql<unknown>(CHATBOT_KNOWLEDGE_BASE, { preview, limit: PAGE_SIZE, skip: 0 }, { preview });
+  const firstColl = (first as { chatbotKnowledgeBaseCollection?: { total?: number; items?: Array<{ contentName?: string; sourceUrl?: string; content?: { json?: unknown } }> } }).chatbotKnowledgeBaseCollection;
+  const total = Math.max(0, Number(firstColl?.total || 0));
+  all = (firstColl?.items ?? []).slice();
+  // If more pages, iterate
+  let fetched = all.length;
+  while (fetched < total) {
+    const next = await gql<unknown>(CHATBOT_KNOWLEDGE_BASE, { preview, limit: PAGE_SIZE, skip: fetched }, { preview });
+    const nextItems = (next as { chatbotKnowledgeBaseCollection?: { items?: Array<{ contentName?: string; sourceUrl?: string; content?: { json?: unknown } }> } }).chatbotKnowledgeBaseCollection?.items ?? [];
+    if (!nextItems.length) break;
+    all.push(...nextItems);
+    fetched += nextItems.length;
+  }
+  return all
     .map((i) => ({
       name: String(i.contentName || '').trim(),
       sourceUrl: i.sourceUrl || undefined,

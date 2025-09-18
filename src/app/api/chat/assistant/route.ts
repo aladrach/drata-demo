@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import OpenAI from "openai";
 import { listChatbotKnowledgeBase } from "@/lib/cms/contentful";
+import { getCached, setCached } from "@/lib/server-cache";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,8 +16,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const queryText = (body?.query as string) || "";
     // Optional cap for number of KB docs; Infinity means include all
-    const kbLimitEnv = Number(process.env.KB_DOCS_LIMIT);
-    const kbLimit = Number.isFinite(kbLimitEnv) && kbLimitEnv > 0 ? kbLimitEnv : Infinity;
+    const kbCacheTtl = Math.max(30, Number(process.env.KB_CACHE_TTL_SECONDS || 300));
+    const kbTopK = Math.max(1, Math.min(20, Number(process.env.KB_TOP_K || 5)));
     const perDocChars = Math.max(1, Number(process.env.KB_PER_DOC_CHARS || 4000));
     if (!queryText) {
       return new Response(JSON.stringify({ error: "Missing 'query' in request body" }), { status: 400, headers: { "Content-Type": "application/json" } });
@@ -28,18 +29,38 @@ export async function POST(request: NextRequest) {
     }
 
     // Tool definition: getKBChunks
-    async function getKBChunksTool({ query, limit }: { query: string; limit?: number }): Promise<KBRef[]> {
-      const kbEntries = await listChatbotKnowledgeBase({ preview: false });
-      // Return ALL entries (trimmed per doc); ignore limit unless explicitly provided and smaller
-      const all = kbEntries.map((e) => ({
-        title: e.name,
-        url: e.sourceUrl,
-        text: e.text.length > perDocChars ? e.text.slice(0, perDocChars) : e.text,
-      }));
-      const effectiveLimit = (typeof limit === 'number' && Number.isFinite(limit))
-        ? Math.max(1, Number(limit))
-        : (Number.isFinite(kbLimit) ? kbLimit : all.length);
-      return all.slice(0, effectiveLimit);
+    async function getKBChunksTool({ query: _query, limit }: { query: string; limit?: number }): Promise<KBRef[]> {
+      const cacheKey = `kbRefs:v1:perDoc=${perDocChars}`;
+      let all = getCached<KBRef[]>("assistant-kb", cacheKey);
+      if (!all) {
+        const kbEntries = await listChatbotKnowledgeBase({ preview: false });
+        all = kbEntries.map((e) => ({
+          title: e.name,
+          url: e.sourceUrl,
+          text: e.text.length > perDocChars ? e.text.slice(0, perDocChars) : e.text,
+        }));
+        setCached("assistant-kb", cacheKey, all, kbCacheTtl);
+      }
+      // Rank by relevance to query (prefer title matches)
+      const q = String(_query || '').toLowerCase().trim();
+      const tokens = Array.from(new Set(q.split(/\s+/).filter((t) => t.length >= 2)));
+      const scored = all.map((r, idx) => {
+        const title = String(r.title || '').toLowerCase();
+        const text = String(r.text || '').toLowerCase();
+        let score = 0;
+        if (q && title.includes(q)) score += 20;
+        if (q && text.includes(q)) score += 8;
+        for (const t of tokens) {
+          if (title.includes(t)) score += 5;
+          if (text.includes(t)) score += 1;
+        }
+        return { r, idx, score };
+      });
+      scored.sort((a, b) => (b.score - a.score) || (a.idx - b.idx));
+      const sorted = scored.map((s) => s.r);
+      const requested = Number.isFinite(Number(limit)) && Number(limit) > 0 ? Number(limit) : kbTopK;
+      const effectiveLimit = Math.min(sorted.length, requested);
+      return sorted.slice(0, effectiveLimit);
     }
 
     const tools = [
@@ -62,7 +83,10 @@ export async function POST(request: NextRequest) {
 
     const system = [
       "You are a helpful assistant for Drata.",
-      "Use ONLY knowledge returned by the getKBChunks function. If none is relevant, say you don't know.",
+      "Before answering ANY user query, you MUST call the getKBChunks tool with the user's query to retrieve knowledge.",
+      "Use ONLY the knowledge returned by getKBChunks to answer. Prefer documents whose title or content closely matches the user's topic.",
+      "If you cite a document, include the title and URL in the answer.",
+      "Only if getKBChunks returns zero documents should you say you don't know. Otherwise, provide the best answer grounded in the returned content.",
       "Respond in concise Markdown.",
     ].join("\n");
 
@@ -76,27 +100,12 @@ export async function POST(request: NextRequest) {
     });
 
     const finalText = await runner.finalContent();
-    const lastTool: { name?: string; output?: KBRef[] } | undefined = await (runner as unknown as { finalFunctionToolCall: () => Promise<{ name?: string; output?: KBRef[] } | undefined> }).finalFunctionToolCall();
-
-    // Collect references from last tool call if present
-    let refs: KBRef[] | undefined;
-    try {
-      if (lastTool && lastTool.name === "getKBChunks") {
-        const out = lastTool.output as KBRef[] | undefined;
-        if (Array.isArray(out)) refs = out.filter((r) => r && r.url);
-      }
-    } catch {}
 
     const headers: Record<string, string> = {
       "Cache-Control": "no-store, no-transform",
       "Content-Type": "text/plain; charset=utf-8",
     };
-    if (refs && refs.length) {
-      const top = refs[0];
-      if (top?.title) headers["X-KB-Title"] = String(top.title);
-      if (top?.url) headers["X-KB-Url"] = String(top.url);
-      try { headers["X-KB-Refs"] = JSON.stringify(refs.map((r) => ({ title: r.title, url: r.url! }))); } catch {}
-    }
+    // No reference headers emitted
 
     // Stream the final text incrementally to the client to enable progressive UI updates
     const encoder = new TextEncoder();
@@ -108,6 +117,13 @@ export async function POST(request: NextRequest) {
         let i = 0;
         const push = () => {
           if (i >= text.length) {
+            try {
+              // Append a JSON metadata trailer that includes only the full content
+              const trailer = { content: text } as const;
+              const PREFIX = "\n<|assistant_metadata|>";
+              const SUFFIX = "</|assistant_metadata|>";
+              controller.enqueue(encoder.encode(`${PREFIX}${JSON.stringify(trailer)}${SUFFIX}`));
+            } catch {}
             controller.close();
             return;
           }
