@@ -34,22 +34,53 @@ export default function Home() {
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {[
             {
+              title: "Feature page demo",
+              description: "Example landing page rendered from CMS blocks.",
+              details:
+                "See modular sections like Hero, FeatureGrid, CTABanner, and more—all editor-managed.",
+              href: "/features/demo-feature",
+            },
+            {
+              title: "AI Chat",
+              description: "Real-time assistant with streaming responses.",
+              details:
+                "Renders Markdown, shows references, and surfaces FAQs/CTAs pulled from the CMS.",
+              href: "/chat",
+            },
+            {
+              title: "Personalization plan",
+              description: "Account-level experiences without client-side flicker.",
+              details:
+                "Edge signals, segment-aware caching, and CMS variants for scalable personalization.",
+              href: "/personalization",
+            },
+            {
+              title: "Documentation",
+              description: "Architecture, content model, performance, and deployment.",
+              details:
+                "Dive into how pages are composed, data is fetched, and the app is instrumented.",
+              href: "/docs",
+            },
+            {
               title: "CMS-powered pages",
-              description: "Publish content from your CMS—no code deploys needed.",
+              description: "Publish content from your Contentful—no code deploys needed.",
               details:
                 "Render marketing pages with modern UI components while keeping content separate from presentation.",
+              href: "/docs#content-model",
             },
             {
               title: "Composable blocks",
               description: "Build pages from reusable, configurable blocks.",
               details:
                 "Mix and match sections like hero, features, testimonials, and CTAs to ship faster.",
+              href: "/docs#content-model",
             },
             {
               title: "Dark mode ready",
               description: "Adaptive theming that respects user preferences.",
               details:
                 "All components support light/dark themes via Tailwind and shadcn/ui tokens.",
+              href: "/docs#performance",
             },
           ].map((item, i) => (
             <Card key={i} className="transition-all hover:shadow-md hover:-translate-y-0.5">
@@ -62,7 +93,7 @@ export default function Home() {
               </CardContent>
               <CardFooter>
                 <Button variant="ghost" asChild>
-                  <Link href="/features/demo-feature">Explore</Link>
+                  <Link href={item.href ?? "/docs"}>Explore</Link>
                 </Button>
               </CardFooter>
             </Card>
