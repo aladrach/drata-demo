@@ -20,7 +20,7 @@ export default function Hero(props: HeroType) {
           </div>
         </div>
         {media?.url ? (
-          <div className="relative aspect-[16/10] w-full animate-in fade-in-50 zoom-in-95 duration-700 overflow-hidden rounded-2xl ring-1 ring-border shadow-xl">
+          <div className="relative aspect-[16/10] w-full animate-in fade-in-50 zoom-in-95 duration-700 overflow-hidden">
             <Image src={media.url} alt={headline} fill sizes="(min-width: 768px) 50vw, 100vw" className="object-cover" loading="eager" fetchPriority='high' />
           </div>
         ) : null}
