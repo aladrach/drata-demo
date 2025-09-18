@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { BookOpen, Blocks, FileText, LayoutGrid, MessageSquare, Moon, Target } from "lucide-react";
 
 export default function Home() {
   return (
@@ -39,6 +40,7 @@ export default function Home() {
               details:
                 "See modular sections like Hero, FeatureGrid, CTABanner, and more—all editor-managed.",
               href: "/features/demo-feature",
+              icon: LayoutGrid,
             },
             {
               title: "AI Chat",
@@ -46,6 +48,7 @@ export default function Home() {
               details:
                 "Renders Markdown, shows references, and surfaces FAQs/CTAs pulled from the CMS.",
               href: "/chat",
+              icon: MessageSquare,
             },
             {
               title: "Personalization plan",
@@ -53,6 +56,7 @@ export default function Home() {
               details:
                 "Edge signals, segment-aware caching, and CMS variants for scalable personalization.",
               href: "/personalization",
+              icon: Target,
             },
             {
               title: "Documentation",
@@ -60,6 +64,7 @@ export default function Home() {
               details:
                 "Dive into how pages are composed, data is fetched, and the app is instrumented.",
               href: "/docs",
+              icon: BookOpen,
             },
             {
               title: "CMS-powered pages",
@@ -67,6 +72,7 @@ export default function Home() {
               details:
                 "Render marketing pages with modern UI components while keeping content separate from presentation.",
               href: "/docs#content-model",
+              icon: FileText,
             },
             {
               title: "Composable blocks",
@@ -74,6 +80,7 @@ export default function Home() {
               details:
                 "Mix and match sections like hero, features, testimonials, and CTAs to ship faster.",
               href: "/docs#content-model",
+              icon: Blocks,
             },
             {
               title: "Dark mode ready",
@@ -81,11 +88,15 @@ export default function Home() {
               details:
                 "All components support light/dark themes via Tailwind and shadcn/ui tokens.",
               href: "/docs#performance",
+              icon: Moon,
             },
           ].map((item, i) => (
             <Card key={i} className="transition-all hover:shadow-md hover:-translate-y-0.5">
               <CardHeader>
-                <CardTitle>{item.title}</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <item.icon className="h-5 w-5 text-primary" aria-hidden="true" />
+                  {item.title}
+                </CardTitle>
                 <CardDescription>{item.description}</CardDescription>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground">
