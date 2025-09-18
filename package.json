@@ -20,6 +20,7 @@
     "@radix-ui/react-separator": "^1.1.7",
     "@radix-ui/react-slot": "^1.2.3",
     "ai": "^5.0.45",
+    "babel-plugin-react-compiler": "19.1.0-rc.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.544.0",
