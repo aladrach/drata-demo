@@ -5,8 +5,6 @@ import { useEffect, useRef, useState, useLayoutEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
-import PerfectScrollbar from "react-perfect-scrollbar";
-import "react-perfect-scrollbar/dist/css/styles.css";
 
 type AssistantExtras = {
   answerText?: string;
@@ -56,9 +54,6 @@ export default function ChatClient({
     const wrapper = chatWrapperRef.current;
     const candidates: (HTMLElement | null)[] = [
       scrollContainerRef.current,
-      wrapper ? (wrapper.querySelector('.scrollbar-container.ps.ps--active-y') as HTMLElement | null) : null,
-      wrapper ? (wrapper.querySelector('.ps') as HTMLElement | null) : null,
-      wrapper ? (wrapper.querySelector('ul.flex.flex-col.gap-3') as HTMLElement | null) : null,
       wrapper as HTMLElement | null,
     ];
     for (const el of candidates) {
@@ -402,21 +397,17 @@ export default function ChatClient({
             <div className="w-full flex flex-col gap-4 flex-1 min-h-0 p-3 sm:p-4">
           <div className="w-full flex-1 rounded-lg chat-container min-h-0">
             <div ref={chatWrapperRef} style={{ height: '100%', width: '100%', position: 'relative' }}>
-              <PerfectScrollbar 
-                key="chat-scrollbar"
-                options={{
-                  suppressScrollX: true,
-                  wheelSpeed: 1,
-                  wheelPropagation: true,
-                  minScrollbarLength: 20,
-                }}
-                containerRef={(ref: HTMLElement | null) => { scrollContainerRef.current = ref; }}
-                style={{ 
-                  height: '100%', 
+              <div
+                ref={(ref: HTMLDivElement | null) => { scrollContainerRef.current = ref; }}
+                style={{
+                  height: '100%',
                   width: '100%',
                   padding: '1rem',
-                  boxSizing: 'border-box'
+                  boxSizing: 'border-box',
+                  overflowY: 'auto',
+                  overflowX: 'hidden',
                 }}
+                className="native-scroll"
               >
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full py-12 fade-in">
@@ -571,7 +562,7 @@ export default function ChatClient({
               </>
             )}
             {/* bottom typing indicator removed to avoid duplication */}
-            </PerfectScrollbar>
+            </div>
             </div>
           </div>
           {featuredPages.length > 0 && (
