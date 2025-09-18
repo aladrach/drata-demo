@@ -5,7 +5,6 @@ const nextConfig: NextConfig = {
     // Reduce client JavaScript by tree-shaking large icon packages
     optimizePackageImports: ["lucide-react"],
     optimizeCss: true, // Enable CSS optimization
-    reactCompiler: true,
     optimizeServerReact: true, // Optimize React on server
   },
   images: {
