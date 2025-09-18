@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    // Reduce client JavaScript by tree-shaking large icon packages
+    optimizePackageImports: ["lucide-react"],
+  },
   images: {
     // Fine-tune responsive sizing for better mobile srcset selection
     deviceSizes: [320, 360, 375, 390, 414, 430, 480, 540, 600, 640, 750, 828, 1080],

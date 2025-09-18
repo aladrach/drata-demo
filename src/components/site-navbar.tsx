@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
-import { ThemeToggle } from "@/components/theme-toggle";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import {
   NavigationMenu,
@@ -12,6 +12,11 @@ import {
   NavigationMenuList,
 } from "@/components/ui/navigation-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+
+const ThemeToggle = dynamic(
+  () => import("@/components/theme-toggle").then((m) => m.ThemeToggle),
+  { ssr: false }
+);
 
 const links = [
   { href: "/", label: "Home" },
