@@ -1,8 +1,9 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useEffect, useRef, useState, useLayoutEffect } from "react";
+import { useEffect, useRef, useState, useLayoutEffect, useMemo, memo } from "react";
 import ReactMarkdown from "react-markdown";
+import type { Components as MarkdownComponents } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 
@@ -16,8 +17,10 @@ type AssistantExtras = {
 };
 
 type ChatMessage =
-  | { role: "user"; content: string }
-  | ({ role: "assistant"; content: string } & AssistantExtras);
+  | { id: number; role: "user"; content: string }
+  | ({ id: number; role: "assistant"; content: string } & AssistantExtras);
+
+type AssistantMessage = { id: number; role: "assistant"; content: string } & AssistantExtras;
 
 type ChatClientProps = {
   initialRecommendedQuestions?: string[];
@@ -46,6 +49,96 @@ export default function ChatClient({
   const manualLockRef = useRef(false);
   const chatWrapperRef = useRef<HTMLDivElement | null>(null);
   const [faqsExpanded, setFaqsExpanded] = useState(false);
+
+  const idCounterRef = useRef<number>(1);
+  const nextId = () => (idCounterRef.current += 1);
+
+  const markdownComponents = useMemo<MarkdownComponents>(() => ({
+    p: (props: React.HTMLAttributes<HTMLParagraphElement>) => <p className="mb-4 leading-7" {...props} />,
+    ul: (props: React.HTMLAttributes<HTMLUListElement>) => <ul className="list-disc ml-6 my-3 space-y-1" {...props} />,
+    ol: (props: React.HTMLAttributes<HTMLOListElement>) => <ol className="list-decimal ml-6 my-3 space-y-1" {...props} />,
+    li: (props: React.LiHTMLAttributes<HTMLLIElement>) => <li className="leading-7" {...props} />,
+    h1: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h1 className="text-xl font-semibold mt-4 mb-2" {...props} />,
+    h2: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h2 className="text-lg font-semibold mt-4 mb-2" {...props} />,
+    h3: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h3 className="text-base font-semibold mt-4 mb-2" {...props} />,
+    a: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a className="underline hover:no-underline" target="_blank" rel="noreferrer" {...props} />,
+    code: (props: React.HTMLAttributes<HTMLElement>) => <code className="bg-black/5 dark:bg-white/10 px-1 py-0.5 rounded" {...props} />,
+  }), []);
+
+  const MessageItem = memo(function MessageItem({
+    message,
+    isLastUser,
+    lastSentUserElementRef,
+    markdownComponents,
+  }: {
+    message: ChatMessage;
+    isLastUser: boolean;
+    lastSentUserElementRef: React.MutableRefObject<HTMLDivElement | null>;
+    markdownComponents: MarkdownComponents | undefined;
+  }) {
+    const isAssistant = message.role === "assistant";
+    const messageText = isAssistant ? ((message as AssistantExtras).answerText ?? message.content) : message.content;
+    return (
+      <li className={`${isAssistant ? "flex justify-start" : "flex justify-end"} fade-in`}>
+        <div
+          className={
+            isAssistant
+              ? "max-w-[85%] rounded-2xl px-4 py-2 text-sm message-bubble-assistant"
+              : "max-w-[85%] rounded-2xl px-4 py-2 text-sm message-bubble-user"
+          }
+          ref={isLastUser ? lastSentUserElementRef : undefined}
+        >
+          {isAssistant ? (
+            <div className="prose prose-sm dark:prose-invert max-w-none fade-in">
+              {messageText ? (
+                <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={markdownComponents}>
+                  {messageText}
+                </ReactMarkdown>
+              ) : (
+                <div className="flex items-center gap-2 text-muted-foreground/80" aria-label="Assistant is typing">
+                  <span className="inline-flex gap-1">
+                    <span className="inline-block size-1.5 rounded-full bg-current animate-bounce [animation-delay:0ms]" />
+                    <span className="inline-block size-1.5 rounded-full bg-current animate-bounce [animation-delay:120ms]" />
+                    <span className="inline-block size-1.5 rounded-full bg-current animate-bounce [animation-delay:240ms]" />
+                  </span>
+                  <span>Thinking…</span>
+                </div>
+              )}
+              {message.role === "assistant" && ((message as AssistantExtras).kbRefs?.length || (message as AssistantExtras).kbUrl) ? (
+                <div className="mt-3">
+                  {((message as AssistantExtras).kbRefs && (message as AssistantExtras).kbRefs!.length > 1) ? (
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">References</div>
+                      <ul className="list-disc ml-6 space-y-1">
+                        {(message as AssistantExtras).kbRefs!.map((r, idx) => (
+                          <li key={`${idx}-${r.url}`} className="text-xs">
+                            <a className="underline hover:no-underline" href={r.url} target="_blank" rel="noreferrer">
+                              {r.title || r.url}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <a
+                      className="text-xs underline hover:no-underline px-2 py-1 rounded-md"
+                      href={((message as AssistantExtras).kbRefs && (message as AssistantExtras).kbRefs![0]?.url) || (message as AssistantExtras).kbUrl!}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {`Learn more${((message as AssistantExtras).kbRefs && (message as AssistantExtras).kbRefs![0]?.title) ? ` about ${(message as AssistantExtras).kbRefs![0]!.title}` : ((message as AssistantExtras).kbTitle ? ` about ${(message as AssistantExtras).kbTitle}` : '')}`}
+                    </a>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <span className="whitespace-pre-wrap break-words">{messageText}</span>
+          )}
+        </div>
+      </li>
+    );
+  });
 
   function resolveScrollContainer(): HTMLElement | null {
     if (scrollContainerRef.current && document.contains(scrollContainerRef.current)) {
@@ -158,11 +251,7 @@ export default function ChatClient({
     // reserved for future debugging hooks
   }, [messages]);
 
-  // no-op effect retained for potential layout settling
-  useEffect(() => {
-    const timer = setTimeout(() => {}, 500);
-    return () => clearTimeout(timer);
-  }, []);
+  // removed: no-op layout settling effect
 
   // (removed unused parseApiPayload helper)
 
@@ -193,16 +282,20 @@ export default function ChatClient({
     if (!text || isLoading) return;
     setIsLoading(true);
     setFaqsExpanded(false);
-    const id = Date.now();
-    lastSentUserIdRef.current = id;
+    const userId = nextId();
+    lastSentUserIdRef.current = userId;
     pendingScrollToUserRef.current = true;
     manualLockRef.current = false;
     followModeRef.current = "topAnchor";
-    setMessages((prev) => [...prev, { role: "user", content: text } as ChatMessage]);
+    setMessages((prev) => [...prev, { id: userId, role: "user", content: text } as ChatMessage]);
     setInput("");
     try {
       // Show assistant typing immediately and follow bottom while streaming
-      setMessages((prev) => [...prev, { role: "assistant", content: "", answerText: "", streaming: true } as ChatMessage & AssistantExtras]);
+      const assistantId = nextId();
+      setMessages((prev) => [
+        ...prev,
+        { id: assistantId, role: "assistant", content: "", answerText: "", streaming: true } as AssistantMessage,
+      ]);
       if (!manualLockRef.current) {
         followModeRef.current = "bottom";
       }
@@ -258,12 +351,17 @@ export default function ChatClient({
           for (let i = next.length - 1; i >= 0; i--) {
             const m = next[i] as ChatMessage & Partial<AssistantExtras>;
             if (m && m.role === "assistant") {
-              (m as AssistantExtras).streaming = true;
-              (m as AssistantExtras).answerText = accumulated;
-              (m as unknown as { content: string }).content = accumulated;
-              if (kbTitle) (m as AssistantExtras).kbTitle = kbTitle;
-              if (kbUrl) (m as AssistantExtras).kbUrl = kbUrl;
-              if (kbRefs && kbRefs.length) (m as AssistantExtras).kbRefs = kbRefs;
+              const updated: AssistantMessage = {
+                id: (m as ChatMessage).id,
+                role: "assistant",
+                content: accumulated,
+                answerText: accumulated,
+                streaming: true,
+                kbTitle: kbTitle ?? (m as AssistantExtras).kbTitle,
+                kbUrl: kbUrl ?? (m as AssistantExtras).kbUrl,
+                kbRefs: (kbRefs && kbRefs.length ? kbRefs : (m as AssistantExtras).kbRefs) as AssistantMessage["kbRefs"],
+              };
+              next[i] = updated as unknown as ChatMessage;
               break;
             }
           }
@@ -338,12 +436,17 @@ export default function ChatClient({
         for (let i = next.length - 1; i >= 0; i--) {
           const m = next[i] as ChatMessage & Partial<AssistantExtras>;
           if (m && m.role === "assistant") {
-            (m as unknown as { content: string }).content = accumulated;
-            (m as AssistantExtras).answerText = accumulated;
-            if (finalKbTitle) (m as AssistantExtras).kbTitle = finalKbTitle;
-            if (finalKbUrl) (m as AssistantExtras).kbUrl = finalKbUrl;
-            if (finalKbRefs && finalKbRefs.length) (m as AssistantExtras).kbRefs = finalKbRefs;
-            (m as AssistantExtras).streaming = false;
+            const updated: AssistantMessage = {
+              id: (m as ChatMessage).id,
+              role: "assistant",
+              content: accumulated,
+              answerText: accumulated,
+              streaming: false,
+              kbTitle: finalKbTitle ?? (m as AssistantExtras).kbTitle,
+              kbUrl: finalKbUrl ?? (m as AssistantExtras).kbUrl,
+              kbRefs: (finalKbRefs && finalKbRefs.length ? finalKbRefs : (m as AssistantExtras).kbRefs) as AssistantMessage["kbRefs"],
+            };
+            next[i] = updated as unknown as ChatMessage;
             break;
           }
         }
@@ -360,9 +463,17 @@ export default function ChatClient({
           const m = next[i] as ChatMessage & Partial<AssistantExtras>;
           if (m && m.role === "assistant") {
             const err = `Error: ${msg}`;
-            (m as unknown as { content: string }).content = err;
-            (m as AssistantExtras).answerText = err;
-            (m as AssistantExtras).streaming = false;
+            const updated: AssistantMessage = {
+              id: (m as ChatMessage).id,
+              role: "assistant",
+              content: err,
+              answerText: err,
+              streaming: false,
+              kbTitle: (m as AssistantExtras).kbTitle,
+              kbUrl: (m as AssistantExtras).kbUrl,
+              kbRefs: (m as AssistantExtras).kbRefs as AssistantMessage["kbRefs"],
+            };
+            next[i] = updated as unknown as ChatMessage;
             break;
           }
         }
@@ -477,86 +588,15 @@ export default function ChatClient({
                 </div>
               )}
               <ul className="flex flex-col gap-3">
-                {messages.map((m, i) => {
-                  const isAssistant = m.role === "assistant";
-                  const messageText = isAssistant ? ((m as AssistantExtras).answerText ?? m.content) : m.content;
-                  const isJustSentUser = !isAssistant && i === messages.length - 1;
-                  const key = `${m.role}-${i}`;
-                  return (
-                    <li key={key} className={`${isAssistant ? "flex justify-start" : "flex justify-end"} fade-in`}>
-                      <div
-                        className={
-                          isAssistant
-                            ? "max-w-[85%] rounded-2xl px-4 py-2 text-sm message-bubble-assistant"
-                            : "max-w-[85%] rounded-2xl px-4 py-2 text-sm message-bubble-user"
-                        }
-                        ref={isJustSentUser ? lastSentUserElementRef : undefined}
-                      >
-                        {isAssistant ? (
-                          <div className="prose prose-sm dark:prose-invert max-w-none fade-in">
-                            {messageText ? (
-                              <ReactMarkdown
-                                remarkPlugins={[remarkGfm, remarkBreaks]}
-                                components={{
-                                  p: (props) => <p className="mb-4 leading-7" {...props} />,
-                                  ul: (props) => <ul className="list-disc ml-6 my-3 space-y-1" {...props} />,
-                                  ol: (props) => <ol className="list-decimal ml-6 my-3 space-y-1" {...props} />,
-                                  li: (props) => <li className="leading-7" {...props} />,
-                                  h1: (props) => <h1 className="text-xl font-semibold mt-4 mb-2" {...props} />,
-                                  h2: (props) => <h2 className="text-lg font-semibold mt-4 mb-2" {...props} />,
-                                  h3: (props) => <h3 className="text-base font-semibold mt-4 mb-2" {...props} />,
-                                  a: (props) => <a className="underline hover:no-underline" target="_blank" rel="noreferrer" {...props} />,
-                                  code: (props) => <code className="bg-black/5 dark:bg-white/10 px-1 py-0.5 rounded" {...props} />,
-                                }}
-                              >
-                                {messageText}
-                              </ReactMarkdown>
-                            ) : (
-                              <div className="flex items-center gap-2 text-muted-foreground/80" aria-label="Assistant is typing">
-                                <span className="inline-flex gap-1">
-                                  <span className="inline-block size-1.5 rounded-full bg-current animate-bounce [animation-delay:0ms]" />
-                                  <span className="inline-block size-1.5 rounded-full bg-current animate-bounce [animation-delay:120ms]" />
-                                  <span className="inline-block size-1.5 rounded-full bg-current animate-bounce [animation-delay:240ms]" />
-                                </span>
-                                <span>Thinking…</span>
-                              </div>
-                            )}
-                            {m.role === "assistant" && ((m as AssistantExtras).kbRefs?.length || (m as AssistantExtras).kbUrl) ? (
-                              <div className="mt-3">
-                                {((m as AssistantExtras).kbRefs && (m as AssistantExtras).kbRefs!.length > 1) ? (
-                                  <div>
-                                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">References</div>
-                                    <ul className="list-disc ml-6 space-y-1">
-                                      {(m as AssistantExtras).kbRefs!.map((r, idx) => (
-                                        <li key={`${idx}-${r.url}`} className="text-xs">
-                                          <a className="underline hover:no-underline" href={r.url} target="_blank" rel="noreferrer">
-                                            {r.title || r.url}
-                                          </a>
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                ) : (
-                                  <a
-                                    className="text-xs underline hover:no-underline px-2 py-1 rounded-md"
-                                    href={((m as AssistantExtras).kbRefs && (m as AssistantExtras).kbRefs![0]?.url) || (m as AssistantExtras).kbUrl!}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                  >
-                                    {`Learn more${((m as AssistantExtras).kbRefs && (m as AssistantExtras).kbRefs![0]?.title) ? ` about ${(m as AssistantExtras).kbRefs![0]!.title}` : ((m as AssistantExtras).kbTitle ? ` about ${(m as AssistantExtras).kbTitle}` : '')}`}
-                                  </a>
-                                )}
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : (
-                          <span className="whitespace-pre-wrap break-words">{messageText}</span>
-                        )}
-                        {/* sources and related questions UI removed */}
-                      </div>
-                    </li>
-                  );
-                })}
+                {messages.map((m, i) => (
+                  <MessageItem
+                    key={m.id}
+                    message={m}
+                    isLastUser={!((m as ChatMessage).role === 'assistant') && i === messages.length - 1}
+                    lastSentUserElementRef={lastSentUserElementRef}
+                    markdownComponents={markdownComponents}
+                  />
+                ))}
                 <div ref={messagesEndRef} />
               </ul>
               </>
