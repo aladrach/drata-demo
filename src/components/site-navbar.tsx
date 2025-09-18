@@ -49,7 +49,7 @@ export function SiteNavbar() {
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <Button asChild size="sm">
-            <Link href="/signup">Get started</Link>
+            <Link href="#">Get started</Link>
           </Button>
           <Sheet>
             <SheetTrigger asChild>
