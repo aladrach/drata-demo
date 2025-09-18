@@ -29,6 +29,22 @@ export default async function Section({ design, children, loading = 'lazy' }: Pr
     loading === 'eager' && background === 'image' && backgroundImageUrl
       ? await fetchInlineMedia(backgroundImageUrl, 3600)
       : null;
+  const svgCoverHtml = (() => {
+    if (!inlineBg || inlineBg.kind !== 'svg') return null;
+    const svg = inlineBg.svg;
+    const openingTagMatch = svg.match(/<svg[^>]*>/i);
+    if (!openingTagMatch) return svg;
+    let openingTag = openingTagMatch[0];
+    if (/preserveAspectRatio\s*=\s*/i.test(openingTag)) {
+      openingTag = openingTag
+        .replace(/preserveAspectRatio\s*=\s*"[^"]*"/i, 'preserveAspectRatio="xMidYMid slice"')
+        .replace(/preserveAspectRatio\s*=\s*'[^']*'/i, 'preserveAspectRatio="xMidYMid slice"')
+        .replace(/preserveAspectRatio\s*=\s*[^\s>"']+/i, 'preserveAspectRatio="xMidYMid slice"');
+    } else {
+      openingTag = openingTag.replace(/>$/i, ' preserveAspectRatio="xMidYMid slice">');
+    }
+    return svg.replace(openingTagMatch[0], openingTag);
+  })();
 
   const visibility = [
     hideOn.includes('mobile') ? 'hidden sm:block' : '',
@@ -45,7 +61,7 @@ export default async function Section({ design, children, loading = 'lazy' }: Pr
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0 -z-10"
-            dangerouslySetInnerHTML={{ __html: inlineBg.svg }}
+            dangerouslySetInnerHTML={{ __html: svgCoverHtml ?? inlineBg.svg }}
           />
         ) : (
           <Image
