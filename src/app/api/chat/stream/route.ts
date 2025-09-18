@@ -70,24 +70,25 @@ export async function POST(request: NextRequest) {
     .filter((r) => r.score > 0)
     .sort((a, b) => b.score - a.score);
 
-    const maxCtx = 7000;
-    const maxDocs = Number(process.env.KB_DOCS_LIMIT || 5);
+    const maxCtx = 5000; // trim total prompt size for lower latency
+    const maxDocs = Math.max(1, Number(process.env.KB_DOCS_LIMIT || 3));
     let ctxUsed = 0;
     const selected: Array<{ name: string; url?: string; text: string }> = [];
     for (const r of ranked.slice(0, Math.max(1, maxDocs))) {
-      const chunk = `\n\n### ${r.name}${r.url ? ` (${r.url})` : ""}\n${r.snippet}`;
+      const trimmed = r.snippet.length > 800 ? r.snippet.slice(0, 800) : r.snippet;
+      const chunk = `\n\n### ${r.name}${r.url ? ` (${r.url})` : ""}\n${trimmed}`;
       if (ctxUsed + chunk.length > maxCtx) break;
-      selected.push({ name: r.name, url: r.url, text: r.snippet });
+      selected.push({ name: r.name, url: r.url, text: trimmed });
       ctxUsed += chunk.length;
     }
     const kbContext = selected.length
-      ? selected.map((e) => `---\nTitle: ${e.name}${e.url ? `\nSource: ${e.url}` : ""}\nContent:\n${e.text}`).join("\n\n")
+      ? selected.map((e) => `---\nTitle: ${e.name}\nContent:\n${e.text}`).join("\n\n")
       : "";
 
     const system = [
       "You are a helpful assistant for Drata.",
       "Use ONLY the provided Knowledge Base context to answer. If none of the context is relevant, say: 'Sorry, I don't know.'",
-      "Respond in concise Markdown. When you use information from a source, include a short markdown link using the provided Source URL if present.",
+      "Respond in concise Markdown.",
     ].join("\n");
 
     const prompt = [
@@ -106,12 +107,22 @@ export async function POST(request: NextRequest) {
       abortSignal: request.signal,
     });
 
-    return result.toTextStreamResponse({
-      headers: {
-        "Cache-Control": "no-store, no-transform",
-        "Content-Type": "text/plain; charset=utf-8",
-      },
-    });
+    // Expose referenced KB docs via headers for the client to link to
+    const refs = selected.filter((s) => !!s.url).map((s) => ({ title: s.name, url: s.url! }));
+    const topReferenced = refs[0];
+    const headers: Record<string, string> = {
+      "Cache-Control": "no-store, no-transform",
+      "Content-Type": "text/plain; charset=utf-8",
+    };
+    if (topReferenced) {
+      headers["X-KB-Title"] = topReferenced.title;
+      headers["X-KB-Url"] = topReferenced.url;
+    }
+    if (refs.length > 0) {
+      try { headers["X-KB-Refs"] = JSON.stringify(refs); } catch {}
+    }
+
+    return result.toTextStreamResponse({ headers });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return new Response(JSON.stringify({ error: message }), {

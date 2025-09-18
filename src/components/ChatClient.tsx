@@ -10,10 +10,11 @@ import "react-perfect-scrollbar/dist/css/styles.css";
 
 type AssistantExtras = {
   answerText?: string;
-  sources?: { title?: string; uri: string }[];
-  relatedQuestions?: string[];
   raw?: unknown;
   streaming?: boolean;
+  kbTitle?: string;
+  kbUrl?: string;
+  kbRefs?: Array<{ title?: string; url: string }>;
 };
 
 type ChatMessage =
@@ -25,7 +26,6 @@ export default function ChatClient() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const [isStreaming, setIsStreaming] = useState(false);
   const [recommendedQuestions, setRecommendedQuestions] = useState<string[]>([]);
   const [featuredPages, setFeaturedPages] = useState<{ name: string; url: string }[]>([]);
   const [ctaItems, setCtaItems] = useState<{ name: string; url: string }[]>([]);
@@ -150,13 +150,7 @@ export default function ChatClient() {
   }, [messages]);
 
   useEffect(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const m = messages[i] as Partial<ChatMessage & AssistantExtras>;
-      if (m && m.role === "assistant") {
-        console.debug("latest assistant relatedQuestions", m.relatedQuestions);
-        break;
-      }
-    }
+    // reserved for future debugging hooks
   }, [messages]);
 
   // no-op effect retained for potential layout settling
@@ -234,64 +228,7 @@ export default function ChatClient() {
     };
   }, []);
 
-  function extractProposedFollowUps(input: string): { cleanedText: string; followUps: string[] } {
-    if (!input) {
-      return { cleanedText: input, followUps: [] };
-    }
-    const htmlSectionRegex = /(<(?:p|h[1-6])[^>]*>\s*(?:<strong>|<b>)?\s*(?:here\s+are\s+(?:some|the)\s+)?(?:(?:proposed|suggested|recommended)\s+)?(?:next\s+)?(?:follow(?:[-\s\u2011]?up)?\s+)?questions\s*:?(?:<\/strong>|<\/b>)?\s*<\/(?:p|h[1-6])>\s*<ul[^>]*>)([\s\S]*?)(<\/ul>)/i;
-    const htmlMatch = input.match(htmlSectionRegex);
-    if (htmlMatch) {
-      const listHtml = htmlMatch[2] || "";
-      const liRegex = /<li[^>]*>([\s\S]*?)<\/li>/gi;
-      const followUps: string[] = [];
-      let m: RegExpExecArray | null;
-      while ((m = liRegex.exec(listHtml)) !== null) {
-        const raw = (m[1] || "")
-          .replace(/<[^>]+>/g, "")
-          .replace(/\s+/g, " ")
-          .trim();
-        if (raw) followUps.push(raw);
-      }
-      const cleanedText = input.replace(htmlMatch[0], "");
-      return { cleanedText, followUps };
-    }
-    const lines = input.split(/\r?\n/);
-    const headingRegexes: RegExp[] = [
-      /^\s*(?:#{1,6}\s*)?(?:\*\*)?\s*(?:here\s+are\s+(?:some|the)\s+)?(?:(?:proposed|suggested|recommended)\s+)?(?:next\s+)?follow(?:[-\s\u2011]?up)?\s+questions\s*:?(?:\s*\*\*)?\s*$/i,
-      /^\s*(?:#{1,6}\s*)?(?:\*\*)?\s*(?:here\s+are\s+(?:some|the)\s+)?(?:suggested|recommended|related|next)\s+questions\s*:?(?:\s*\*\*)?\s*$/i,
-      /^\s*(?:#{1,6}\s*)?(?:\*\*)?\s*here\s+are\s+(?:some|the)\s+follow(?:[-\s\u2011]?up)?\s+questions\s*:?(?:\s*\*\*)?\s*$/i,
-    ];
-    let headerIndex = -1;
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (headingRegexes.some((re) => re.test(line))) {
-        headerIndex = i;
-        break;
-      }
-    }
-    if (headerIndex === -1) {
-      return { cleanedText: input, followUps: [] };
-    }
-    let idx = headerIndex + 1;
-    if (idx < lines.length && /^\s*$/.test(lines[idx])) idx++;
-    const bulletRegex = /^\s*(?:[\-\*\u2022\u2013\u2014]|\d+\.)\s+(.*\S)\s*$/;
-    const followUps: string[] = [];
-    let endIdx = idx;
-    while (endIdx < lines.length) {
-      const line = lines[endIdx];
-      const m = line.match(bulletRegex);
-      if (!m) break;
-      const text = (m[1] || "").trim();
-      if (text) followUps.push(text);
-      endIdx++;
-    }
-    if (followUps.length === 0) {
-      return { cleanedText: input, followUps: [] };
-    }
-    const cleanedLines = lines.slice(0, headerIndex).concat(lines.slice(endIdx));
-    const cleanedText = cleanedLines.join("\n");
-    return { cleanedText, followUps };
-  }
+  // removed related-questions parsing
 
   async function sendMessage(textOverride?: string) {
     const text = (textOverride ?? input).trim();
@@ -306,54 +243,113 @@ export default function ChatClient() {
     setMessages((prev) => [...prev, { role: "user", content: text } as ChatMessage]);
     setInput("");
     try {
-      const res = await fetch("/api/chat/stream", {
+      // Show assistant typing immediately and follow bottom while streaming
+      setMessages((prev) => [...prev, { role: "assistant", content: "", answerText: "", streaming: true } as ChatMessage & AssistantExtras]);
+      if (!manualLockRef.current) {
+        followModeRef.current = "bottom";
+      }
+      const res = await fetch("/api/chat/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: text }),
       });
       if (!res.ok || !res.body) {
         const textBody = await res.text().catch(() => "");
-        setMessages((prev) => [...prev, { role: "assistant", content: `Request failed (${res.status})${textBody ? ` - ${textBody}` : ''}` }]);
+        const errMsg = `Request failed (${res.status})${textBody ? ` - ${textBody}` : ''}`;
+        setMessages((prev) => {
+          const next = [...prev];
+          for (let i = next.length - 1; i >= 0; i--) {
+            const m = next[i] as ChatMessage & Partial<AssistantExtras>;
+            if (m && m.role === "assistant") {
+              (m as unknown as { content: string }).content = errMsg;
+              (m as AssistantExtras).answerText = errMsg;
+              (m as AssistantExtras).streaming = false;
+              break;
+            }
+          }
+          return next as ChatMessage[];
+        });
         return;
       }
-      // Maintain streaming state; we do not rely on message IDs for updates
-      setIsStreaming(true);
-      setMessages((prev) => [...prev, { role: "assistant", content: "", answerText: "", streaming: true } as ChatMessage & AssistantExtras]);
+      // capture top KB doc headers (if provided)
+      const kbTitle = res.headers.get("X-KB-Title") || undefined;
+      const kbUrl = res.headers.get("X-KB-Url") || undefined;
+      let kbRefs: Array<{ title?: string; url: string }> | undefined;
+      const refsHeader = res.headers.get("X-KB-Refs");
+      if (refsHeader) {
+        try {
+          const parsed = JSON.parse(refsHeader);
+          if (Array.isArray(parsed)) {
+            kbRefs = parsed
+              .map((r) => ({ title: typeof r.title === 'string' ? r.title : undefined, url: String(r.url || '') }))
+              .filter((r) => !!r.url);
+          }
+        } catch {}
+      }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let accumulated = "";
+      let lastFlush = Date.now();
+      let scheduled = false;
+      const THROTTLE_MS = 50;
+      const flushUpdate = () => {
+        scheduled = false;
+        lastFlush = Date.now();
+        setMessages((prev) => {
+          const next = [...prev];
+          for (let i = next.length - 1; i >= 0; i--) {
+            const m = next[i] as ChatMessage & Partial<AssistantExtras>;
+            if (m && m.role === "assistant") {
+              (m as AssistantExtras).streaming = true;
+              (m as AssistantExtras).answerText = accumulated;
+              (m as unknown as { content: string }).content = accumulated;
+              if (kbTitle) (m as AssistantExtras).kbTitle = kbTitle;
+              if (kbUrl) (m as AssistantExtras).kbUrl = kbUrl;
+              if (kbRefs && kbRefs.length) (m as AssistantExtras).kbRefs = kbRefs;
+              break;
+            }
+          }
+          return next as ChatMessage[];
+        });
+        // auto-follow bottom while streaming
+        if (followModeRef.current === "bottom") {
+          const container = resolveScrollContainer();
+          if (container) {
+            requestAnimationFrame(() => {
+              container.scrollTop = container.scrollHeight;
+            });
+          } else {
+            messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+          }
+        }
+      };
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
         const chunk = decoder.decode(value, { stream: true });
         if (chunk) {
           accumulated += chunk;
-          setMessages((prev) => {
-            const next = [...prev];
-            for (let i = next.length - 1; i >= 0; i--) {
-              const m = next[i] as ChatMessage & Partial<AssistantExtras>;
-              if (m && m.role === "assistant") {
-                (m as AssistantExtras).streaming = true;
-                (m as AssistantExtras).answerText = accumulated;
-                (m as unknown as { content: string }).content = accumulated;
-                break;
-              }
-            }
-            return next as ChatMessage[];
-          });
+          const now = Date.now();
+          if (now - lastFlush >= THROTTLE_MS) {
+            flushUpdate();
+          } else if (!scheduled) {
+            scheduled = true;
+            setTimeout(() => flushUpdate(), THROTTLE_MS - (now - lastFlush));
+          }
         }
       }
-      const extraction = extractProposedFollowUps(accumulated);
-      const finalAnswer = extraction.cleanedText || accumulated;
-      const finalRelated = extraction.followUps.length ? extraction.followUps : undefined;
+      // Ensure final flush in case last chunk didn't trigger
+      flushUpdate();
       setMessages((prev) => {
         const next = [...prev];
         for (let i = next.length - 1; i >= 0; i--) {
           const m = next[i] as ChatMessage & Partial<AssistantExtras>;
           if (m && m.role === "assistant") {
-            (m as unknown as { content: string }).content = finalAnswer;
-            (m as AssistantExtras).answerText = finalAnswer;
-            (m as AssistantExtras).relatedQuestions = finalRelated;
+            (m as unknown as { content: string }).content = accumulated;
+            (m as AssistantExtras).answerText = accumulated;
+            if (kbTitle) (m as AssistantExtras).kbTitle = kbTitle;
+            if (kbUrl) (m as AssistantExtras).kbUrl = kbUrl;
+            if (kbRefs && kbRefs.length) (m as AssistantExtras).kbRefs = kbRefs;
             (m as AssistantExtras).streaming = false;
             break;
           }
@@ -365,10 +361,22 @@ export default function ChatClient() {
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Unknown error";
-      setMessages((prev) => [...prev, { role: "assistant", content: `Error: ${msg}` } as ChatMessage]);
+      setMessages((prev) => {
+        const next = [...prev];
+        for (let i = next.length - 1; i >= 0; i--) {
+          const m = next[i] as ChatMessage & Partial<AssistantExtras>;
+          if (m && m.role === "assistant") {
+            const err = `Error: ${msg}`;
+            (m as unknown as { content: string }).content = err;
+            (m as AssistantExtras).answerText = err;
+            (m as AssistantExtras).streaming = false;
+            break;
+          }
+        }
+        return next as ChatMessage[];
+      });
     } finally {
       setIsLoading(false);
-      setIsStreaming(false);
     }
   }
 
@@ -497,61 +505,65 @@ export default function ChatClient() {
                       >
                         {isAssistant ? (
                           <div className="prose prose-sm dark:prose-invert max-w-none fade-in">
-                            <ReactMarkdown
-                              remarkPlugins={[remarkGfm, remarkBreaks]}
-                              components={{
-                                p: (props) => <p className="mb-4 leading-7" {...props} />,
-                                ul: (props) => <ul className="list-disc ml-6 my-3 space-y-1" {...props} />,
-                                ol: (props) => <ol className="list-decimal ml-6 my-3 space-y-1" {...props} />,
-                                li: (props) => <li className="leading-7" {...props} />,
-                                h1: (props) => <h1 className="text-xl font-semibold mt-4 mb-2" {...props} />,
-                                h2: (props) => <h2 className="text-lg font-semibold mt-4 mb-2" {...props} />,
-                                h3: (props) => <h3 className="text-base font-semibold mt-4 mb-2" {...props} />,
-                                a: (props) => <a className="underline hover:no-underline" target="_blank" rel="noreferrer" {...props} />,
-                                code: (props) => <code className="bg-black/5 dark:bg-white/10 px-1 py-0.5 rounded" {...props} />,
-                              }}
-                            >
-                              {messageText}
-                            </ReactMarkdown>
+                            {messageText ? (
+                              <ReactMarkdown
+                                remarkPlugins={[remarkGfm, remarkBreaks]}
+                                components={{
+                                  p: (props) => <p className="mb-4 leading-7" {...props} />,
+                                  ul: (props) => <ul className="list-disc ml-6 my-3 space-y-1" {...props} />,
+                                  ol: (props) => <ol className="list-decimal ml-6 my-3 space-y-1" {...props} />,
+                                  li: (props) => <li className="leading-7" {...props} />,
+                                  h1: (props) => <h1 className="text-xl font-semibold mt-4 mb-2" {...props} />,
+                                  h2: (props) => <h2 className="text-lg font-semibold mt-4 mb-2" {...props} />,
+                                  h3: (props) => <h3 className="text-base font-semibold mt-4 mb-2" {...props} />,
+                                  a: (props) => <a className="underline hover:no-underline" target="_blank" rel="noreferrer" {...props} />,
+                                  code: (props) => <code className="bg-black/5 dark:bg-white/10 px-1 py-0.5 rounded" {...props} />,
+                                }}
+                              >
+                                {messageText}
+                              </ReactMarkdown>
+                            ) : (
+                              <div className="flex items-center gap-2 text-muted-foreground/80" aria-label="Assistant is typing">
+                                <span className="inline-flex gap-1">
+                                  <span className="inline-block size-1.5 rounded-full bg-current animate-bounce [animation-delay:0ms]" />
+                                  <span className="inline-block size-1.5 rounded-full bg-current animate-bounce [animation-delay:120ms]" />
+                                  <span className="inline-block size-1.5 rounded-full bg-current animate-bounce [animation-delay:240ms]" />
+                                </span>
+                                <span>Thinking…</span>
+                              </div>
+                            )}
+                            {m.role === "assistant" && ((m as AssistantExtras).kbRefs?.length || (m as AssistantExtras).kbUrl) ? (
+                              <div className="mt-3">
+                                {((m as AssistantExtras).kbRefs && (m as AssistantExtras).kbRefs!.length > 1) ? (
+                                  <div>
+                                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">References</div>
+                                    <ul className="list-disc ml-6 space-y-1">
+                                      {(m as AssistantExtras).kbRefs!.map((r, idx) => (
+                                        <li key={`${idx}-${r.url}`} className="text-xs">
+                                          <a className="underline hover:no-underline" href={r.url} target="_blank" rel="noreferrer">
+                                            {r.title || r.url}
+                                          </a>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                ) : (
+                                  <a
+                                    className="text-xs underline hover:no-underline px-2 py-1 rounded-md"
+                                    href={((m as AssistantExtras).kbRefs && (m as AssistantExtras).kbRefs![0]?.url) || (m as AssistantExtras).kbUrl!}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    {`Learn more${((m as AssistantExtras).kbRefs && (m as AssistantExtras).kbRefs![0]?.title) ? ` about ${(m as AssistantExtras).kbRefs![0]!.title}` : ((m as AssistantExtras).kbTitle ? ` about ${(m as AssistantExtras).kbTitle}` : '')}`}
+                                  </a>
+                                )}
+                              </div>
+                            ) : null}
                           </div>
                         ) : (
                           <span className="whitespace-pre-wrap break-words">{messageText}</span>
                         )}
-                        {isAssistant && "sources" in m && m.sources && m.sources.length > 0 && (
-                          <div className="mt-3">
-                            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Sources</div>
-                            <div className="flex flex-wrap gap-2">
-                              {m.sources.map((s, idx) => (
-                                <a
-                                  key={`${s.uri}-${idx}`}
-                                  className="text-xs underline hover:no-underline px-2 py-1 rounded-md source-link"
-                                  href={s.uri}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  {s.title || s.uri}
-                                </a>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        {isAssistant && "relatedQuestions" in m && m.relatedQuestions && m.relatedQuestions.length > 0 && (
-                          <div className="mt-3">
-                            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Suggested questions</div>
-                            <div className="flex flex-wrap gap-2">
-                              {m.relatedQuestions.map((q, idx) => (
-                                <button
-                                  key={`${idx}-${q}`}
-                                  type="button"
-                                  className="text-xs underline hover:no-underline px-2 py-1 rounded-md related-question-btn text-left cursor-pointer"
-                                  onClick={() => handleAsk(q)}
-                                >
-                                  {q}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                        {/* sources and related questions UI removed */}
                       </div>
                     </li>
                   );
@@ -560,16 +572,7 @@ export default function ChatClient() {
               </ul>
               </>
             )}
-            {isStreaming && (
-              <div className="mt-2 ml-1 flex items-center gap-2 text-xs text-muted-foreground typing-indicator slide-up">
-                <span className="inline-flex gap-1">
-                  <span className="inline-block size-1.5 rounded-full bg-current animate-bounce [animation-delay:0ms]" />
-                  <span className="inline-block size-1.5 rounded-full bg-current animate-bounce [animation-delay:120ms]" />
-                  <span className="inline-block size-1.5 rounded-full bg-current animate-bounce [animation-delay:240ms]" />
-                </span>
-                <span className="text-muted-foreground/80">Generating response...</span>
-              </div>
-            )}
+            {/* bottom typing indicator removed to avoid duplication */}
             </PerfectScrollbar>
             </div>
           </div>
