@@ -40,7 +40,6 @@ export default function ChatClient({
   const recommendedQuestions = initialRecommendedQuestions;
   const featuredPages = initialFeaturedPages;
   const ctaItems = initialCtaItems;
-  const lastSentUserIdRef = useRef<number | null>(null);
   const lastSentUserElementRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollToUserRef = useRef(false);
   const scrollContainerRef = useRef<HTMLElement | null>(null);
@@ -247,9 +246,7 @@ export default function ChatClient({
     }
   }, [messages]);
 
-  useEffect(() => {
-    // reserved for future debugging hooks
-  }, [messages]);
+  // removed: reserved for future debugging hooks
 
   // removed: no-op layout settling effect
 
@@ -283,7 +280,6 @@ export default function ChatClient({
     setIsLoading(true);
     setFaqsExpanded(false);
     const userId = nextId();
-    lastSentUserIdRef.current = userId;
     pendingScrollToUserRef.current = true;
     manualLockRef.current = false;
     followModeRef.current = "topAnchor";
@@ -394,38 +390,8 @@ export default function ChatClient({
           }
         }
       }
-      // Parse optional metadata trailer and strip it from the visible text
-      let kbRefsFromTrailer: Array<{ title?: string; url: string }> | undefined;
-      try {
-        const PREFIX = "\n<|assistant_metadata|>";
-        const SUFFIX = "</|assistant_metadata|>";
-        const startIdx = accumulated.lastIndexOf(PREFIX);
-        const endIdx = accumulated.lastIndexOf(SUFFIX);
-        if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-          const jsonStr = accumulated.slice(startIdx + PREFIX.length, endIdx).trim();
-          try {
-            const meta = JSON.parse(jsonStr) as { content?: string; refs?: Array<{ title?: string; url?: string }> };
-            if (meta && Array.isArray(meta.refs)) {
-              kbRefsFromTrailer = meta.refs
-                .map((r) => ({ title: typeof r.title === 'string' ? r.title : undefined, url: String(r.url || '') }))
-                .filter((r) => !!r.url);
-            }
-            if (meta && typeof meta.content === 'string' && meta.content.length > 0) {
-              // Prefer the content field if provided
-              accumulated = meta.content;
-            } else {
-              // Otherwise, strip the trailer from accumulated
-              accumulated = accumulated.slice(0, startIdx);
-            }
-          } catch {
-            // If JSON parse fails, just strip the trailer text to avoid showing it
-            accumulated = accumulated.slice(0, startIdx);
-          }
-        }
-      } catch {}
-
-      // Determine final refs/title/url, preferring headers, falling back to trailer
-      const finalKbRefs = (kbRefs && kbRefs.length) ? kbRefs : kbRefsFromTrailer;
+      // Determine final refs/title/url from headers only (API does not send trailers)
+      const finalKbRefs = (kbRefs && kbRefs.length) ? kbRefs : undefined;
       const finalKbTitle = kbTitle || (finalKbRefs && finalKbRefs[0]?.title) || undefined;
       const finalKbUrl = kbUrl || (finalKbRefs && finalKbRefs[0]?.url) || undefined;
 
