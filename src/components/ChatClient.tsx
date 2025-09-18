@@ -21,14 +21,24 @@ type ChatMessage =
   | { role: "user"; content: string }
   | ({ role: "assistant"; content: string } & AssistantExtras);
 
-export default function ChatClient() {
+type ChatClientProps = {
+  initialRecommendedQuestions?: string[];
+  initialFeaturedPages?: { name: string; url: string }[];
+  initialCtaItems?: { name: string; url: string }[];
+};
+
+export default function ChatClient({
+  initialRecommendedQuestions = [],
+  initialFeaturedPages = [],
+  initialCtaItems = [],
+}: ChatClientProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const [recommendedQuestions, setRecommendedQuestions] = useState<string[]>([]);
-  const [featuredPages, setFeaturedPages] = useState<{ name: string; url: string }[]>([]);
-  const [ctaItems, setCtaItems] = useState<{ name: string; url: string }[]>([]);
+  const recommendedQuestions = initialRecommendedQuestions;
+  const featuredPages = initialFeaturedPages;
+  const ctaItems = initialCtaItems;
   const lastSentUserIdRef = useRef<number | null>(null);
   const lastSentUserElementRef = useRef<HTMLDivElement | null>(null);
   const pendingScrollToUserRef = useRef(false);
@@ -161,24 +171,7 @@ export default function ChatClient() {
 
   // (removed unused parseApiPayload helper)
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/suggestions", { method: "GET", cache: "force-cache" });
-        if (!res.ok) return;
-        const json = await res.json().catch(() => null);
-        if (!json) return;
-        const rqs = (json?.suggestions as string[]) || [];
-        if (!cancelled && rqs.length) {
-          setRecommendedQuestions(rqs);
-        }
-      } catch {}
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // suggested FAQs are provided from server props
 
   useEffect(() => {
     try {
@@ -194,39 +187,9 @@ export default function ChatClient() {
     } catch {}
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/featured-pages", { method: "GET", cache: "no-store" });
-        if (!res.ok) return;
-        const json = await res.json().catch(() => null);
-        if (!json) return;
-        const items = Array.isArray(json?.items) ? json.items : [];
-        if (!cancelled) setFeaturedPages(items);
-      } catch {}
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // featured pages are provided from server props
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/cta", { method: "GET", cache: "no-store" });
-        if (!res.ok) return;
-        const json = await res.json().catch(() => null);
-        if (!json) return;
-        const items = Array.isArray(json?.items) ? json.items : [];
-        if (!cancelled) setCtaItems(items);
-      } catch {}
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // cta items are provided from server props
 
   // removed related-questions parsing
 

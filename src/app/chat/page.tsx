@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import ChatClient from "@/components/ChatClient";
+import Chat from "@/components/Chat";
 
 export const metadata: Metadata = {
   title: "Chat Demo",
@@ -11,7 +11,7 @@ export default function ChatPage() {
       <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight mb-4">Chat Demo</h1>
       <div className="rounded-lg border bg-card">
         <div className="h-[600px]">
-          <ChatClient />
+          <Chat />
         </div>
       </div>
     </div>
