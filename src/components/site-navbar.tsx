@@ -21,6 +21,7 @@ const ThemeToggle = dynamic(
 const links = [
   { href: "/", label: "Home" },
   { href: "/features/demo-feature", label: "Features" },
+  { href: "/contentful", label: "Contentful" },
   { href: "/personalization", label: "Personalization" },
   { href: "/chat", label: "Chat" },
   { href: "/docs", label: "Docs" },

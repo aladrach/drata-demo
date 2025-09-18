@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { BookOpen, Blocks, FileText, LayoutGrid, MessageSquare, Moon, Target } from "lucide-react";
+import { BookOpen, Blocks, FileText, LayoutGrid, MessageSquare, Moon, Target, Database } from "lucide-react";
 
 export default function Home() {
   return (
@@ -41,6 +41,14 @@ export default function Home() {
                 "See modular sections like Hero, FeatureGrid, CTABanner, and more—all editor-managed.",
               href: "/features/demo-feature",
               icon: LayoutGrid,
+            },
+            {
+              title: "Contentful",
+              description: "Schema, editorial workflow, and CMS integration.",
+              details:
+                "See how content types map to React blocks and how caching & revalidation work.",
+              href: "/contentful",
+              icon: Database,
             },
             {
               title: "AI Chat",
