@@ -21,7 +21,11 @@ const ThemeToggle = dynamic(
 const links = [
   { href: "/", label: "Home" },
   { href: "/features/demo-feature", label: "Features" },
+  { href: "/personalization", label: "Personalization" },
+  { href: "/chat", label: "Chat" },
+  { href: "/docs", label: "Docs" },
 ];
+
 
 export function SiteNavbar() {
   const pathname = usePathname();

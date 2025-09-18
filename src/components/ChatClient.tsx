@@ -28,6 +28,20 @@ type ChatClientProps = {
   initialCtaItems?: { name: string; url: string }[];
 };
 
+function sanitizeAssistantText(input: string): string {
+  let output = String(input ?? "");
+  const controlTags = ["assistant_metadata"];
+  for (const tag of controlTags) {
+    const completeBlock = new RegExp(`<\\|${tag}\\|>[\\s\\S]*?<\\/\\|${tag}\\|>`, "g");
+    const openBlockToEnd = new RegExp(`<\\|${tag}\\|>[\\s\\S]*$`, "g");
+    const strayClose = new RegExp(`<\\/\\|${tag}\\|>`, "g");
+    output = output.replace(completeBlock, "");
+    output = output.replace(openBlockToEnd, "");
+    output = output.replace(strayClose, "");
+  }
+  return output;
+}
+
 export default function ChatClient({
   initialRecommendedQuestions = [],
   initialFeaturedPages = [],
@@ -348,11 +362,12 @@ export default function ChatClient({
           for (let i = next.length - 1; i >= 0; i--) {
             const m = next[i] as ChatMessage & Partial<AssistantExtras>;
             if (m && m.role === "assistant") {
+              const sanitized = sanitizeAssistantText(accumulated);
               const updated: AssistantMessage = {
                 id: (m as ChatMessage).id,
                 role: "assistant",
-                content: accumulated,
-                answerText: accumulated,
+                content: sanitized,
+                answerText: sanitized,
                 streaming: true,
                 kbTitle: kbTitle ?? (m as AssistantExtras).kbTitle,
                 kbUrl: kbUrl ?? (m as AssistantExtras).kbUrl,
@@ -402,11 +417,12 @@ export default function ChatClient({
         for (let i = next.length - 1; i >= 0; i--) {
           const m = next[i] as ChatMessage & Partial<AssistantExtras>;
           if (m && m.role === "assistant") {
+            const sanitized = sanitizeAssistantText(accumulated);
             const updated: AssistantMessage = {
               id: (m as ChatMessage).id,
               role: "assistant",
-              content: accumulated,
-              answerText: accumulated,
+              content: sanitized,
+              answerText: sanitized,
               streaming: false,
               kbTitle: finalKbTitle ?? (m as AssistantExtras).kbTitle,
               kbUrl: finalKbUrl ?? (m as AssistantExtras).kbUrl,
