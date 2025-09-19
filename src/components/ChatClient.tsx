@@ -2,10 +2,12 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useEffect, useRef, useState, useLayoutEffect, useMemo, memo } from "react";
-import ReactMarkdown from "react-markdown";
+import dynamic from "next/dynamic";
 import type { Components as MarkdownComponents } from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkBreaks from "remark-breaks";
+
+const MarkdownRenderer = dynamic(() => import("@/components/MarkdownRenderer"), {
+  ssr: false,
+});
 
 type AssistantExtras = {
   answerText?: string;
@@ -105,9 +107,7 @@ export default function ChatClient({
           {isAssistant ? (
             <div className="prose prose-sm dark:prose-invert max-w-none fade-in">
               {messageText ? (
-                <ReactMarkdown skipHtml remarkPlugins={[remarkGfm, remarkBreaks]} components={markdownComponents}>
-                  {messageText}
-                </ReactMarkdown>
+                <MarkdownRenderer components={markdownComponents}>{messageText}</MarkdownRenderer>
               ) : (
                 <div className="flex items-center gap-2 text-muted-foreground/80" aria-label="Assistant is typing">
                   <span className="inline-flex gap-1">
