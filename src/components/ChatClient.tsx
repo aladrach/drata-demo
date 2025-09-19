@@ -249,20 +249,6 @@ export default function ChatClient({
 
   // suggested FAQs are provided from server props
 
-  useEffect(() => {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const candidateKeys = ["q", "query", "prompt", "message"] as const;
-      for (const key of candidateKeys) {
-        const value = params.get(key);
-        if (value && value.trim()) {
-          setInput(value);
-          break;
-        }
-      }
-    } catch {}
-  }, []);
-
   // featured pages are provided from server props
 
   // cta items are provided from server props
