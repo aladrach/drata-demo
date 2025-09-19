@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import OpenAI from "openai";
 import { listChatbotKnowledgeBase } from "@/lib/cms/contentful";
+import { marked } from "marked";
+import sanitizeHtml from "sanitize-html";
 import { getCached, setCached } from "@/lib/server-cache";
 
 export const runtime = "nodejs";
@@ -100,6 +102,20 @@ export async function POST(request: NextRequest) {
     });
 
     const finalText = await runner.finalContent();
+    // Convert Markdown -> sanitized HTML on the server
+    const rawHtml = await marked.parse(String(finalText || ""));
+    const safeHtml = sanitizeHtml(String(rawHtml), {
+      allowedTags: sanitizeHtml.defaults.allowedTags.concat(["h1","h2","h3","img","pre","code"]),
+      allowedAttributes: {
+        a: ["href", "name", "target", "rel"],
+        img: ["src", "alt"],
+        '*': ["class"],
+      },
+      transformTags: {
+        a: sanitizeHtml.simpleTransform('a', { rel: 'noreferrer', target: '_blank' }, true),
+      },
+      // Disallow script/style entirely; sanitize-html blocks by default
+    });
 
     const headers: Record<string, string> = {
       "Cache-Control": "no-store, no-transform",
@@ -109,7 +125,7 @@ export async function POST(request: NextRequest) {
 
     // Stream the final text incrementally to the client to enable progressive UI updates
     const encoder = new TextEncoder();
-    const text = String(finalText || "");
+    const text = String(safeHtml || "");
     const chunkSize = Math.max(16, Math.min(256, Number(process.env.STREAM_CHUNK_SIZE || 64)));
     const delayMs = Math.max(0, Math.min(80, Number(process.env.STREAM_DELAY_MS || 10)));
     const stream = new ReadableStream<Uint8Array>({

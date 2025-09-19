@@ -1,13 +1,7 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useEffect, useRef, useState, useLayoutEffect, useMemo, memo } from "react";
-import dynamic from "next/dynamic";
-import type { Components as MarkdownComponents } from "react-markdown";
-
-const MarkdownRenderer = dynamic(() => import("@/components/MarkdownRenderer"), {
-  ssr: false,
-});
+import { useEffect, useRef, useState, useLayoutEffect, memo } from "react";
 
 type AssistantExtras = {
   answerText?: string;
@@ -68,28 +62,14 @@ export default function ChatClient({
   const idCounterRef = useRef<number>(1);
   const nextId = () => (idCounterRef.current += 1);
 
-  const markdownComponents = useMemo<MarkdownComponents>(() => ({
-    p: (props: React.HTMLAttributes<HTMLParagraphElement>) => <p className="mb-4 leading-7" {...props} />,
-    ul: (props: React.HTMLAttributes<HTMLUListElement>) => <ul className="list-disc ml-6 my-3 space-y-1" {...props} />,
-    ol: (props: React.HTMLAttributes<HTMLOListElement>) => <ol className="list-decimal ml-6 my-3 space-y-1" {...props} />,
-    li: (props: React.LiHTMLAttributes<HTMLLIElement>) => <li className="leading-7" {...props} />,
-    h1: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h1 className="text-xl font-semibold mt-4 mb-2" {...props} />,
-    h2: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h2 className="text-lg font-semibold mt-4 mb-2" {...props} />,
-    h3: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h3 className="text-base font-semibold mt-4 mb-2" {...props} />,
-    a: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a className="underline hover:no-underline" target="_blank" rel="noreferrer" {...props} />,
-    code: (props: React.HTMLAttributes<HTMLElement>) => <code className="bg-black/5 dark:bg-white/10 px-1 py-0.5 rounded" {...props} />,
-  }), []);
-
   const MessageItem = memo(function MessageItem({
     message,
     isLastUser,
     lastSentUserElementRef,
-    markdownComponents,
   }: {
     message: ChatMessage;
     isLastUser: boolean;
     lastSentUserElementRef: React.MutableRefObject<HTMLDivElement | null>;
-    markdownComponents: MarkdownComponents | undefined;
   }) {
     const isAssistant = message.role === "assistant";
     const messageText = isAssistant ? ((message as AssistantExtras).answerText ?? message.content) : message.content;
@@ -107,7 +87,7 @@ export default function ChatClient({
           {isAssistant ? (
             <div className="prose prose-sm dark:prose-invert max-w-none fade-in">
               {messageText ? (
-                <MarkdownRenderer components={markdownComponents}>{messageText}</MarkdownRenderer>
+                <div dangerouslySetInnerHTML={{ __html: messageText }} />
               ) : (
                 <div className="flex items-center gap-2 text-muted-foreground/80" aria-label="Assistant is typing">
                   <span className="inline-flex gap-1">
@@ -576,7 +556,6 @@ export default function ChatClient({
                     message={m}
                     isLastUser={!((m as ChatMessage).role === 'assistant') && i === messages.length - 1}
                     lastSentUserElementRef={lastSentUserElementRef}
-                    markdownComponents={markdownComponents}
                   />
                 ))}
                 <div ref={messagesEndRef} />
