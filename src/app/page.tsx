@@ -14,17 +14,17 @@ export default function Home() {
           <p className="mt-4 text-pretty text-base text-muted-foreground sm:text-lg">
             Build a performant, CMS-driven SaaS marketing site using modern UI components.
           </p>
-          <div className="mt-8 flex items-center justify-center gap-3">
-            <Button size="lg" asChild>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <Button size="lg" className="w-full sm:w-auto" asChild>
               <Link href="/features/demo-feature">View Sample Feature Page</Link>
             </Button>
-            <Button size="lg" variant="outline">
+            <Button size="lg" variant="outline" className="w-full sm:w-auto" asChild>
               <Link href="/docs">View Docs</Link>
             </Button>
-            <Button size="lg" variant="outline">
+            <Button size="lg" variant="outline" className="w-full sm:w-auto" asChild>
               <Link href="/chat">Open AI chat</Link>
             </Button>
-            <Button size="lg" variant="outline">
+            <Button size="lg" variant="outline" className="w-full sm:w-auto" asChild>
               <Link href="/personalization">Personalization Plan</Link>
             </Button>
           </div>
